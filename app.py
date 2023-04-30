@@ -1,51 +1,25 @@
-from flask import Flask,request
+from flask import Flask
+from flask_smorest import Api
+from resources.item import blp as ItemBlueprint
+from resources.store import blp as StoreBlueprint
 
 app = Flask(__name__)
 
-stores = [
-    {
-        "name": "My Store",
-        "items": [
-            {
-                "name": "Chair",
-                "price": 15.99
-            }
-        ]
-    }
-]
 
-@app.get("/store") #http://127.0.0.1:5000/store
-def get_stores():
-    return {"stores": stores}
+#Register blueprints in the api (resources)
+ 
 
-@app.post("/store")
-def create_store():
-    request_data = request.get_json()
-    new_store = {"name": request_data["name"],"items": []}
-    stores.append(new_store)
-    return new_store, 201
+    #configurations options (flask configurations)
+app.config["PROPAGATE_ECXCEPTIONS"] = True  # if there is any exception that occurs hidden inside the extension of flask to propagate into the main app so that we can see it
+# flsk smorest congigs that will show on the docs
+app.config["API_TITLE"] = "Stores REST API"
+app.config["API_VERSION"] = "v1"
+app.config["OPENAPI_VERSION"] = "3.0.3" # openapi is the standard for the api documentation 
+app.config["OPENAPI_URL_PREFIX"] = "/" # tells flask-smorest where the root of the API is.
+app.config["OPENAPI_SWAGGER_UI_PATH"] = "/swagger-ui"
+app.config["OPENAPI_SWAGGER_UI_URL"] = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"  # loads the code from here to display the documentation
 
-@app.post("/store/<string:name>/item") # the name will pass to the function
-def create_item(name): # here the name is <string:name> name part 
-    request_data = request.get_json()
-    for store in stores:
-        if store["name"] == name:
-            new_item = {"name": request_data["name"], "price": request_data["price"]}
-            store["items"].append(new_item)
-            return new_item, 201
-    return {"message": "Store not found"}, 404
 
-@app.get("/store/<string:name>")
-def get_store(name):
-    for store in stores:
-        if store["name"] == name:
-            return store
-    return {"message": "Store not found"}, 404
-
-@app.get("/store/<string:name>/item")
-def get_item_in_store(name):
-    for store in stores:
-        if store["name"] == name:
-            return {"items": store["items"]}
-    return {"message": "Store not found"}, 404
-
+api = Api(app) # this basically connect flask-smorest extension to the flask app
+api.register_blueprint(ItemBlueprint)
+api.register_blueprint(StoreBlueprint)
