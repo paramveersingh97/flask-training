@@ -2,9 +2,10 @@ import uuid
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-from db import items,stores
-
+from models import ItemModel
 from schemas import ItemSchema, ItemUpdateSchema
+from sqlalchemy.exc import SQLAlchemyError
+from db import db
 
 blp = Blueprint("items",__name__,description="Operations on items")
 
@@ -12,47 +13,40 @@ blp = Blueprint("items",__name__,description="Operations on items")
 class Item(MethodView):
     @blp.response(200,ItemSchema)
     def get(self,item_id):
-        try:
-            print(items)
-            return items[item_id]
-        except KeyError:
-            abort(404, message="Item not found")
+        item = ItemModel.query.get_or_404(item_id) # this query comes in Flask SQLAchemy not in Vanilla SQLAlchemy # retrieves the item by primary key if there is no item present it will automatically abort 
+        return item
+        
     def delete(self,item_id):
-        try:
-            del items[item_id]
-            return {"message": "Item deleted"}
-        except KeyError:
-            abort(404, message="Item not found.")
+        item = ItemModel.query.get_or_404(item_id)
+        db.session.delete(item)
+        db.session.commit()
+        return {"message": "Item Deleted."}
+
     @blp.arguments(ItemUpdateSchema)
     @blp.response(200,ItemSchema)
     def put(self, item_data, item_id):
-        item_data = request.get_json()      
-        try:
-            item = items[item_id]
-            # item |= item_data # this does an inplace modification (in higher version pf python)
-            item ={**item,**item_data} #This is unpacking both dictionaries into a new one, resulting in a union.
-            return item
-        except KeyError:
-            abort(404, message="Item not found.")
+        item = ItemModel.query.get(item_id)
+        if item:
+            item.price = item_data["price"]
+            item.name = item_data["name"]
+        else:
+            item = ItemModel(id = item_id,**item_data)
+        db.session.add(item)
+        db.session.commit()
 
 @blp.route("/item")
 class ItemList(MethodView):
     @blp.response(200,ItemSchema(many=True))
     def get(self):
-        print(items)
-        return items.values()  # this will return the list of items not the onject o fthe items because we put in the marshmellow ItemSchema(many =True)
+        return ItemModel.query.all()  # this will return the list of items not the object o fthe items because we put in the marshmellow ItemSchema(many =True)
 
     @blp.arguments(ItemSchema)
     @blp.response(201, ItemSchema)
     def post(self,item_data):  # the 2nd paramter conatins the json/dict which is the validated fields that the Schema requested. 
-        for item in items.values():
-            if (item_data["name"] == item["name"] and item_data["store_id"] == item["store_id"]):
-                abort(400, message="Item already exist.")
-
-        if item_data["store_id"] not in stores:
-            abort(404, message="Store not found")
-
-        item_id = uuid.uuid4().hex
-        item = {**item_data, "id": item_id }
-        items[item_id] = item
+        item = ItemModel(**item_data)  # **item_data is turning dict to key word args
+        try:
+            db.session.add(item)
+            db.session.commit()
+        except SQLAlchemyError:
+            abort(500, message="An error occured while insering the item.")
         return item
